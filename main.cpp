@@ -122,7 +122,6 @@ void removeCar(sqlite3 *DB) {
 
 
 void makeReservation(sqlite3* DB, int user_id) {
-    system("cls");
     int car_id;
     string end_date;
     cout << "Enter the car ID: ";
@@ -191,7 +190,6 @@ sqlite3_finalize(insert_stmt);
 }
 
 void cancelReservation(sqlite3 *DB, int id){
-    system("cls");
     int reserve_id, choice;
     float penality = 100.0;
     cout << "Enter the Reservation ID: ";
@@ -283,7 +281,6 @@ void cancelReservation(sqlite3 *DB, int id){
 }
 
 void viewReservationDetails(sqlite3 *DB, int id) {
-    system("cls");
     cout << "================== Reservation Details ====================" << endl;
 
     string query = "SELECT * FROM reservations WHERE chat_id = " + to_string(id) + " ;";
@@ -358,7 +355,6 @@ void viewReservationDetails(sqlite3 *DB, int id) {
 
 
 void user_menu(sqlite3 *DB, int id){
-    system("cls");
     int choice = 0;
         cout << endl << "User Menu" << endl;
         cout << "--------------------" << endl;
@@ -385,7 +381,6 @@ void user_menu(sqlite3 *DB, int id){
     }
 
 void displayAdminMenu(sqlite3* DB) {
-    system("cls");
     int choice = 0;
     A:
     cout << "=================================" << endl;
@@ -441,7 +436,6 @@ void displayAdminMenu(sqlite3* DB) {
 
     public:
 bool register_user(sqlite3* DB){
-    system("cls");
     // implement needed to show the id of the user
             User newUser;
             string key;
@@ -498,7 +492,6 @@ bool register_user(sqlite3* DB){
         }
 
 void login(sqlite3* DB) {
-    system("cls");
     string email, password;
     
     cout << "Login" << endl;
@@ -547,7 +540,6 @@ void login(sqlite3* DB) {
 }
 
 void viewCars(sqlite3 *DB){
-    system("cls");
     cout << "======================Cars======================" << endl;
     string query = "SELECT * FROM cars";
     
@@ -643,7 +635,7 @@ void mainMenu(sqlite3* DB) {
 
 
 int main() {
-    cout << "The program Has been updated." << endl;
+    cout << "The program Has been updated again." << endl;
     sqlite3* DB;
     int exit = sqlite3_open("test.db", &DB);
     if (exit) {
