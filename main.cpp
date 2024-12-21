@@ -59,7 +59,7 @@ public:
     }
 
     void displayAll() {
-
+        cout << "=====================Reports=====================" << endl;
         if (head == nullptr) {
             cout << "No reports available.\n";
             return;
@@ -67,7 +67,6 @@ public:
         
         Node* temp = head;
         
-        cout << "\nReservation daiyly Report:\n\n";
         while (temp != nullptr) {
             cout << "-------------------------------------" << endl;
             cout << "Reported by: " << temp->reported_by << endl;
@@ -83,36 +82,37 @@ public:
             
             temp = temp->next;
         }
+        cout << "======================End of Reports=====================" << endl;
     }
 
     bool compareDates(string end_date) {
-    time_t now = time(0); // Current time
+        time_t now = time(0); // Current time
 
-    tm* currentDate = localtime(&now);
+        tm* currentDate = localtime(&now);
 
-    try {
-        int year = stoi(end_date.substr(0, 4));
-        int month = stoi(end_date.substr(5, 2));
-        int day = stoi(end_date.substr(8, 2));
+        try {
+            int year = stoi(end_date.substr(0, 4));
+            int month = stoi(end_date.substr(5, 2));
+            int day = stoi(end_date.substr(8, 2));
 
-        tm endDate = {};
-        endDate.tm_year = year - 1900;
-        endDate.tm_mon = month - 1;
-        endDate.tm_mday = day;
+            tm endDate = {};
+            endDate.tm_year = year - 1900;
+            endDate.tm_mon = month - 1;
+            endDate.tm_mday = day;
 
-        time_t endTime = mktime(&endDate);
+            time_t endTime = mktime(&endDate);
 
-        if (endTime == -1) {
-            throw runtime_error("Invalid date conversion.");
+            if (endTime == -1) {
+                throw runtime_error("Invalid date conversion.");
+            }
+
+            return now >= endTime;
         }
-
-        return now >= endTime;
+        catch (const exception& e) {
+            cerr << "Error: " << e.what() << endl;
+            return false; 
+        }
     }
-    catch (const exception& e) {
-        cerr << "Error: " << e.what() << endl;
-        return false; 
-    }
-}
 
 
 } report;
@@ -553,11 +553,8 @@ void removeCar(sqlite3 *DB) {
     }
 }
 
-void makeReport(sqlite3 *DB,int Car_id){
+void makeReport(sqlite3 *DB, int Car_id, int employee_id){
     string first_name, last_name;
-    int employee_id;
-    cout << "Enter your employee Id to make a report: ";
-    cin >> employee_id;
     
     string query = "SELECT first_name, last_name FROM users WHERE user_id = " + to_string(employee_id);
     sqlite3_stmt *stmt;
@@ -610,17 +607,50 @@ void makeReport(sqlite3 *DB,int Car_id){
 }
 
 // The improvement for this function is done
-void makeReservation(sqlite3* DB) {
+void makeReservation(sqlite3* DB, int employee_id) {
     int car_id, user_id;
     int days;
+
     cout << "Enter the user ID: ";
     cin >> user_id;
+
+    // Check for any pending reservations for this user
+    string pendingQuery = "SELECT reservation_id, end_date FROM reservations WHERE user_id = " + to_string(user_id) + " AND status = 'Pending';";
+    sqlite3_stmt* pendingStmt;
+
+    int rc = sqlite3_prepare_v2(DB, pendingQuery.c_str(), -1, &pendingStmt, NULL);
+    if (rc != SQLITE_OK) {
+        cerr << "Failed to prepare statement for checking pending reservations: " << sqlite3_errmsg(DB) << endl;
+        return;
+    }
+
+    bool hasOverdueReservation = false;
+
+    while (sqlite3_step(pendingStmt) == SQLITE_ROW) {
+        int reservation_id = sqlite3_column_int(pendingStmt, 0);
+        string end_date = reinterpret_cast<const char*>(sqlite3_column_text(pendingStmt, 1));
+
+        // Check if the reservation is overdue using report.compareDates(end_date)
+        if (report.compareDates(end_date)) {
+            cout << "Warning: User has an overdue reservation (Reservation ID: " << reservation_id << ").\n";
+            hasOverdueReservation = true;
+        }
+    }
+
+    sqlite3_finalize(pendingStmt);
+
+    if (hasOverdueReservation) {
+        cout << "Cannot proceed with the reservation until overdue reservations are resolved.\n";
+        return;
+    }
+
+    // Proceed with reservation if no overdue reservations
     cout << "Enter the car ID: ";
     cin >> car_id;
 
     string carQuery = "SELECT daily_rental_price, status FROM cars WHERE car_id = " + to_string(car_id) + ";";
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt, NULL);
+    rc = sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         cerr << "Failed to prepare statement: " << sqlite3_errmsg(DB) << endl;
         return;
@@ -628,7 +658,7 @@ void makeReservation(sqlite3* DB) {
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_ROW) {
-        cout << "Car not found or unAvailable." << endl;
+        cout << "Car not found or unavailable." << endl;
         sqlite3_finalize(stmt);
         return;
     }
@@ -641,7 +671,7 @@ void makeReservation(sqlite3* DB) {
     sqlite3_finalize(stmt);
 
     if (status != "Available") {
-        cout << "Car is not Available for reservation." << endl;
+        cout << "Car is not available for reservation." << endl;
         return;
     }
 
@@ -666,23 +696,22 @@ void makeReservation(sqlite3* DB) {
         cerr << "Error inserting reservation: " << sqlite3_errmsg(DB) << endl;
     } else {
         cout << "Reservation made successfully!" << endl;
-        makeReport(DB, car_id); // Generate report
+        makeReport(DB, car_id, employee_id); // Generate report
     }
 
     sqlite3_finalize(insert_stmt);
+
     string query_to_update_car = "UPDATE cars SET status = 'Rented' WHERE car_id = " + to_string(car_id) + " ;";
     
     rc = sqlite3_exec(DB, query_to_update_car.c_str(), 0, 0, nullptr);
-    if(rc != SQLITE_OK){
+    if(rc != SQLITE_OK) {
         cerr << "Error updating car status: " << sqlite3_errmsg(DB) << endl;
-    }else{
+    } else {
         cout << "Car status updated successfully!" << endl;
     }
-
 }
-
 // done maybe it need some additional improvement to generate reports
-void cancelReservation(sqlite3 *DB) {
+void cancelReservation(sqlite3 *DB, int employee_id) {
     int reserve_id, id;
     float penality = 0.25, daily_rent = 0.0, total_price;
     string payment_method, payment_status = "Success";
@@ -774,7 +803,7 @@ void cancelReservation(sqlite3 *DB) {
         cerr << "Error updating reservation: " << sqlite3_errmsg(DB) << endl;
         return;
     }
-    makeReport(DB, car_id); // Generate report
+    makeReport(DB, car_id, employee_id); // Generate report
     // Update car status to "Available"
     string updateCarQuery = "UPDATE cars SET status = 'Available' WHERE car_id = " + to_string(car_id) + ";";
     rc = sqlite3_exec(DB, updateCarQuery.c_str(), 0, 0, nullptr);
@@ -787,7 +816,6 @@ void cancelReservation(sqlite3 *DB) {
 
     cout << "=================== Reservation cancelled successfully =====================" << endl;
 }
-
 void viewReservationDetails(sqlite3 *DB) {
     cout << "=================== Reservation Details ====================" << endl;
     cout << "Search by:" << endl;
@@ -802,14 +830,12 @@ void viewReservationDetails(sqlite3 *DB) {
         int user_id;
         cout << "Enter User ID: ";
         cin >> user_id;
-
         query = "SELECT * FROM reservations WHERE user_id = " + to_string(user_id) + ";";
     } else if (choice == 2) {
         string status;
         cout << "Enter Status (Pending, Completed, or Canceled): ";
         cin.ignore();
         getline(cin, status);
-
         query = "SELECT * FROM reservations WHERE status = '" + status + "';";
     } else {
         cout << "Invalid option selected." << endl;
@@ -817,86 +843,153 @@ void viewReservationDetails(sqlite3 *DB) {
     }
 
     sqlite3_stmt *stmt;
-    int rc = sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        cerr << "Error preparing statement: " << sqlite3_errmsg(DB) << endl;
-        return;
-    }
+    if (sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        bool hasResults = false;
 
-    bool hasResults = false;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            hasResults = true;
 
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        hasResults = true;
+            // Fetching all reservation table columns
+            int reservation_id = sqlite3_column_int(stmt, 0);
+            int user_id = sqlite3_column_int(stmt, 1);
+            int car_id = sqlite3_column_int(stmt, 2);
+            const char *end_date = (const char *)sqlite3_column_text(stmt, 4);
+            double total_price = sqlite3_column_double(stmt, 5);
+            double extra_charge = sqlite3_column_double(stmt, 6);
+            const char *status = (const char *)sqlite3_column_text(stmt, 7);
 
-        int reservation_id = sqlite3_column_int(stmt, 0);
-        int car_id = sqlite3_column_int(stmt, 2);
-        const unsigned char *start_date_text = sqlite3_column_text(stmt, 3);
-        const unsigned char *end_date_text = sqlite3_column_text(stmt, 4);
-        float total_price = sqlite3_column_double(stmt, 5);
-        const unsigned char *status_text = sqlite3_column_text(stmt, 6);
+            // Fetch car details
+            string carQuery = "SELECT * FROM cars WHERE car_id = " + to_string(car_id) + ";";
+            sqlite3_stmt *stmt_car;
+            sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, nullptr);
+            sqlite3_step(stmt_car);
 
-        string start_date = start_date_text ? reinterpret_cast<const char *>(start_date_text) : "NULL";
-        string end_date = end_date_text ? reinterpret_cast<const char *>(end_date_text) : "NULL";
-        string reservation_status = status_text ? reinterpret_cast<const char *>(status_text) : "NULL";
+            const char *producer = (const char *)sqlite3_column_text(stmt_car, 1);
+            const char *model = (const char *)sqlite3_column_text(stmt_car, 2);
+            const char *license_plate = (const char *)sqlite3_column_text(stmt_car, 3);
 
-        // Fetch car details
-        string carQuery = "SELECT * FROM cars WHERE car_id = " + to_string(car_id) + ";";
-        sqlite3_stmt *stmt_car;
-
-        rc = sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, NULL);
-        if (rc != SQLITE_OK) {
-            cerr << "Error preparing car query: " << sqlite3_errmsg(DB) << endl;
-            sqlite3_finalize(stmt);
-            return;
-        }
-
-        rc = sqlite3_step(stmt_car);
-        if (rc != SQLITE_ROW) {
-            cerr << "Error fetching car details: " << sqlite3_errmsg(DB) << endl;
             sqlite3_finalize(stmt_car);
-            sqlite3_finalize(stmt);
+
+            // Displaying all data
+            cout << "----------------------------------------------------" << endl;
+            cout << "Reservation ID: " << reservation_id << endl;
+            cout << "User ID: " << user_id << endl;
+            cout << "Car Details: " << endl;
+            cout << "\tProducer: " << producer << endl;
+            cout << "\tModel: " << model << endl;
+            cout << "\tLicense Plate: " << license_plate << endl;
+            cout << "End Date: " << end_date << endl;
+            cout << "Total Price: $" << total_price << endl;
+            cout << "Extra Charge: $" << extra_charge << endl;
+            cout << "Status: " << status << endl;
+            cout << "----------------------------------------------------" << endl;
+        }
+        cout << "=========================END======================" << endl;
+        if (!hasResults) {
+            cout << "\nNo reservations found for the given criteria.\n";
+        }
+
+        sqlite3_finalize(stmt);
+    } else {
+        cerr << "Error preparing query: " << sqlite3_errmsg(DB) << endl;
+    }
+}
+
+void viewAllReservation(sqlite3 *DB) {
+    int choice;
+
+    while (true) {
+        cout << endl << "================ Reservation Menu ==============" << endl;
+        cout << "1. View All Reservations" << endl;
+        cout << "2. View Overdue Reservations" << endl;
+        cout << "0. Back" << endl;
+        cout << "===============================================" << endl;
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        if (choice == 0) {
+            cout << "Returning to the previous menu.\n";
             return;
         }
 
-        string producer = reinterpret_cast<const char *>(sqlite3_column_text(stmt_car, 1));
-        string model = reinterpret_cast<const char *>(sqlite3_column_text(stmt_car, 2));
-        string license_plate = reinterpret_cast<const char *>(sqlite3_column_text(stmt_car, 3));
+        string query = "SELECT * FROM reservations";
 
-        sqlite3_finalize(stmt_car);
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+            bool hasResults = false;
 
-        // Display reservation details
-        cout << "----------------------------------------------------" << endl;
-        cout << "Reservation ID: " << reservation_id << endl;
-        cout << "Car ID: " << car_id << endl;
-        cout << "Produced by: " << producer << endl;
-        cout << "Model: " << model << endl;
-        cout << "License Plate: " << license_plate << endl;
-        cout << "Start Date: " << start_date << endl;
-        cout << "End Date: " << end_date << endl;
-        cout << "Total Price: " << total_price << endl;
-        cout << "Status: " << reservation_status << endl;
-        cout << "----------------------------------------------------" << endl;
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                int reservation_id = sqlite3_column_int(stmt, 0);
+                int user_id = sqlite3_column_int(stmt, 1);
+                int car_id = sqlite3_column_int(stmt, 2);
+                string start_date = (char *)sqlite3_column_text(stmt, 3);
+                string end_date = (char *)sqlite3_column_text(stmt, 4);
+                double total_price = sqlite3_column_double(stmt, 5);
+                double extra_charge = sqlite3_column_double(stmt, 6);
+                string status = (char *)sqlite3_column_text(stmt, 7);
+
+                // Skip if option 2 (Overdue Reservations) is selected and the end date is not overdue
+                if (choice == 2) {
+                    if (status != "Pending")
+                        continue;
+                    else if (!report.compareDates(end_date))
+                        continue;
+                }
+
+                string carQuery = "SELECT * FROM cars WHERE car_id = " + to_string(car_id) + ";";
+                sqlite3_stmt *stmt_car;
+
+                if (sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, nullptr) == SQLITE_OK) {
+                    if (sqlite3_step(stmt_car) == SQLITE_ROW) {
+                        const char *producer = (const char *)sqlite3_column_text(stmt_car, 1);
+                        const char *model = (const char *)sqlite3_column_text(stmt_car, 2);
+                        const char *license_plate = (const char *)sqlite3_column_text(stmt_car, 3);
+
+                        // Display reservation details
+                        cout << "----------------------------------------------------" << endl;
+                        cout << "Reservation ID: " << reservation_id << endl;
+                        cout << "User ID: " << user_id << endl;
+                        cout << "Producer: " << producer << endl;
+                        cout << "Model: " << model << endl;
+                        cout << "License Plate: " << license_plate << endl;
+                        cout << "Car ID: " << car_id << endl;
+                        cout << "Start Date: " << start_date << endl;
+                        cout << "End Date: " << end_date << endl;
+                        cout << "Total Price: $" << total_price << endl;
+                        cout << "Extra Charge: $" << extra_charge << endl;
+                        cout << "Status: " << status << endl;
+                        cout << "----------------------------------------------------" << endl;
+
+                        hasResults = true;
+                    }
+                    sqlite3_finalize(stmt_car);
+                } else {
+                    cerr << "Error fetching car details: " << sqlite3_errmsg(DB) << endl;
+                }
+            }
+
+            if (!hasResults) {
+                cout << "\nNo records found.\n";
+            }
+
+            sqlite3_finalize(stmt);
+        } else {
+            cerr << "Error executing query: " << sqlite3_errmsg(DB) << endl;
+        }
     }
-
-    if (!hasResults) {
-        cout << "No reservations found for the given criteria." << endl;
-    } else if (rc != SQLITE_DONE) {
-        cerr << "Error while fetching reservations: " << sqlite3_errmsg(DB) << endl;
-    }
-
-    sqlite3_finalize(stmt);
 }
 
 // done
-void agentMenu(sqlite3 *DB){
+void agentMenu(sqlite3 *DB, int employee_id){
     int choice = 0;
     while(true){
-        cout << endl << "================User Menu==============" << endl;
+        cout << endl << "================Agent Menu==============" << endl;
         cout << "1. Make a Reservation" << endl;
         cout << "2. Cancel a Reservation" << endl;
-        cout << "3. View Reservation Details" << endl;
+        cout << "3. Search Reservation" << endl;
         cout << "4. Register New Customer" << endl;
         cout << "5. View All Customers." << endl;
+        cout << "6. View Reservations." << endl;
         cout << "0. Log Out" << endl;
         cout << "=============================================" << endl;
         cout << "Enter your choice: ";
@@ -904,21 +997,25 @@ void agentMenu(sqlite3 *DB){
 
         switch(choice){
             case 1:
-                makeReservation(DB);
+                makeReservation(DB, employee_id);
                 break;
             case 2:
-                cancelReservation(DB);
+                cancelReservation(DB, employee_id);
                 break;
             case 3:
                 viewReservationDetails(DB);
                 break;
             case 4:
                 cout << "Registering a new user..." << endl;
-                register_user(DB);
+                register_user(DB, employee_id);
                 break;
             case 5:
                 cout << "Loading users..." << endl;
                 viewAllUsers(DB);
+                break;
+            case 6:
+                cout << "Loading users..." << endl;
+                viewAllReservation(DB);
                 break;
             case 0:
                 return;
@@ -982,7 +1079,7 @@ void inventoryManagerMenu(sqlite3* DB) {
 }
 
 //need to implement this function
-void adminMenu(sqlite3 *DB) {
+void adminMenu(sqlite3 *DB, int employee_id) {
     int choice = 0;
     string key = admin_key;
 
@@ -994,7 +1091,7 @@ void adminMenu(sqlite3 *DB) {
         cout << "1. Add New User" << endl;
         cout << "2. View Reports" << endl;
         cout << "3. View Users" << endl;
-        cout << "4. Update Employee Data" << endl;
+        cout << "4. Update User Data" << endl;
         cout << "5. Fire Employee" << endl;
         cout << "0. Log Out" << endl;
         cout << "=================================" << endl;
@@ -1005,7 +1102,7 @@ void adminMenu(sqlite3 *DB) {
         switch (choice) {
             case 1:
                 cout << "Redirecting to add a new user..." << endl;
-                register_user(DB, key);
+                register_user(DB, employee_id, key);
                 break;
 
             case 2:
@@ -1040,7 +1137,7 @@ void adminMenu(sqlite3 *DB) {
 
 
     public:
-void register_user(sqlite3* DB, string key=""){
+void register_user(sqlite3* DB, int employee_id, string key=""){
     // implement needed to show the id of the user
             User newUser;
             int choice;
@@ -1103,6 +1200,9 @@ void register_user(sqlite3* DB, string key=""){
             } else {
                 cout << "User registered successfully!" << endl;
                 sqlite3_finalize(stmt);
+                if (newUser.is_admin == "Customer"){
+                    makeReservation(DB, employee_id);
+                }
                 return;
             }
 
@@ -1143,7 +1243,7 @@ void login(sqlite3* DB) {
         if (strcmp(role, "Admin") == 0) {
             cout << "Welcome, Admin!" << endl;
             sqlite3_finalize(stmt);
-            adminMenu(DB);
+            adminMenu(DB, user_id);
         } else if (strcmp(role, "Inventory Manager") == 0) {
             cout << "Welcome, Inventory Manager!" << endl;
             sqlite3_finalize(stmt);
@@ -1151,7 +1251,7 @@ void login(sqlite3* DB) {
         } else if (strcmp(role, "Service Agent") == 0) {
             cout << "Welcome, " << role << "!" << endl;
             sqlite3_finalize(stmt);
-            agentMenu(DB);
+            agentMenu(DB, user_id);
         } else {
             cerr << "Unexpected role: " << role << endl;
             sqlite3_finalize(stmt);
@@ -1229,6 +1329,8 @@ void viewCars(sqlite3 *DB, bool isManager = false){
         cout << "----------------------------------------------------" << endl;
         
     }
+    cout << "=====================End of Car list=====================" << endl;
+
 
     if (!car_exist){
         cout << "Currently their is no car in the database" << endl;
