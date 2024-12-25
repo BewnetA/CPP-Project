@@ -590,12 +590,13 @@ void makeReport(sqlite3 *DB, int Car_id, int employee_id){
 }
 
 // The improvement for this function is done
-void makeReservation(sqlite3* DB, int employee_id) {
-    int car_id, user_id;
+void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
+    int car_id;
     int days;
-
-    cout << "Enter the user ID: ";
-    cin >> user_id;
+    if (user_id == 0){
+        cout << "Enter the user ID: ";
+        cin >> user_id;
+    }
 
     // Check for any pending reservations for this user
     string pendingQuery = "SELECT reservation_id, end_date FROM reservations WHERE user_id = " + to_string(user_id) + " AND status = 'Pending';";
@@ -726,6 +727,12 @@ void cancelReservation(sqlite3 *DB, int employee_id) {
         sqlite3_finalize(stmt);
         return;
     }
+
+    else if (status != "Pending") {
+        cout << "Reservation is already " + status + "ed "<< endl;
+        return;
+    }
+    
     sqlite3_finalize(stmt);
 
     // Calculate penalty or refund based on reservation timing
@@ -1111,7 +1118,6 @@ void adminMenu(sqlite3 *DB, int employee_id) {
 
     public:
 void register_user(sqlite3* DB, int employee_id, string key = "") {
-    // Implement needed to show the ID of the user
     User newUser;
     int choice;
 
@@ -1128,6 +1134,8 @@ void register_user(sqlite3* DB, int employee_id, string key = "") {
             newUser.user_role = "Inventory Manager";
         else if (choice == 3)
             newUser.user_role = "Service Agent";
+    } else {
+        newUser.user_role = "Customer"; // Default role
     }
 
     cout << endl << "Register New User" << endl;
@@ -1158,11 +1166,26 @@ void register_user(sqlite3* DB, int employee_id, string key = "") {
         cerr << "Error inserting data: " << sqlite3_errmsg(DB) << endl;
     } else {
         cout << "User registered successfully!" << endl;
+
         if (newUser.user_role == "Customer") {
-            makeReservation(DB, employee_id);
+            // Retrieve the user ID of the newly registered user
+            string userIdQuery = "SELECT user_id FROM Users WHERE email = '" + newUser.email + "';";
+            sqlite3_stmt* stmt;
+
+            rc = sqlite3_prepare_v2(DB, userIdQuery.c_str(), -1, &stmt, nullptr);
+            if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
+                int newUserId = sqlite3_column_int(stmt, 0);
+                sqlite3_finalize(stmt);
+
+                // Pass the user ID to the makeReservation function
+                makeReservation(DB, employee_id, newUserId);
+            } else {
+                cerr << "Error fetching user ID: " << sqlite3_errmsg(DB) << endl;
+            }
         }
     }
 }
+
 
 void login(sqlite3* DB) {
     string email, password;
