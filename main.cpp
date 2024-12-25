@@ -1,19 +1,11 @@
 #include <iostream>
 #include <ctime>
-#include <string.h>
 #include "sqlite3.h"
 
 using namespace std;
 
 string admin_key = "admin";
 // string "Enter your choice: " = "Please select an option: ";
-
-
-/*
-    The system need an update in all part of the code that interact
-    interact with the database cuz their are new feature and columns 
-    in the new DB so you must make this changes before runing the code
-*/
 
 
 struct Node {
@@ -85,7 +77,14 @@ public:
         cout << "======================End of Reports=====================" << endl;
     }
 
-    bool compareDates(string end_date) {
+
+/* 
+    This function returns "true" or "1" if the current date of the machine is
+    greater than or equal to the end date from the database.
+    It helps to identify the overdue reservations
+   
+*/ 
+  bool compareDates(string end_date) {
         time_t now = time(0); // Current time
 
         tm* currentDate = localtime(&now);
@@ -108,7 +107,7 @@ public:
 
             return now >= endTime;
         }
-        catch (const exception& e) {
+        catch (exception& e) {
             cerr << "Error: " << e.what() << endl;
             return false; 
         }
@@ -121,10 +120,10 @@ public:
 
 struct User{
     string first_name, last_name, email, password, phone, address;
-    string is_admin;
+    string user_role;
 
     User(){
-        is_admin = "Customer";
+        user_role = "Customer";
     }
 };
 
@@ -278,17 +277,16 @@ void updateUser(sqlite3 *DB) {
     int userId;
     cout << "\nEnter the User ID of the user you want to update: ";
     cin >> userId;
+    cin.ignore(); // To consume the newline character left by cin
 
     // Fetch the user details to confirm existence
-    string query = "SELECT first_name, last_name, email, phone, address, role FROM users WHERE user_id = ?";
+    string query = "SELECT first_name, last_name, email, phone, address, role FROM users WHERE user_id = " + to_string(userId) + ";";
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
         cerr << "Error preparing statement: " << sqlite3_errmsg(DB) << endl;
         return;
     }
-
-    sqlite3_bind_int(stmt, 1, userId);
 
     if (sqlite3_step(stmt) != SQLITE_ROW) {
         cout << "User with ID " << userId << " not found." << endl;
@@ -313,6 +311,8 @@ void updateUser(sqlite3 *DB) {
     cout << "6. Role: " << role << endl;
     cout << "===================================" << endl;
 
+    sqlite3_finalize(stmt);
+
     // Get new values for all fields
     string newFirstName, newLastName, newEmail, newPhone, newAddress, newRole;
     cout << "Enter new First Name (current: " << firstName << "): ";
@@ -329,30 +329,21 @@ void updateUser(sqlite3 *DB) {
     getline(cin, newRole);
 
     // Construct the update query
-    string updateQuery = "UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, address = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?";
-    rc = sqlite3_prepare_v2(DB, updateQuery.c_str(), -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        cerr << "Error preparing update statement: " << sqlite3_errmsg(DB) << endl;
-        return;
-    }
-
-    // Bind the updated values to the query
-    sqlite3_bind_text(stmt, 1, newFirstName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, newLastName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, newEmail.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, newPhone.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, newAddress.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 6, newRole.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 7, userId);
+    string updateQuery = "UPDATE users SET first_name = '" + newFirstName +
+                         "', last_name = '" + newLastName +
+                         "', email = '" + newEmail +
+                         "', phone = '" + newPhone +
+                         "', address = '" + newAddress +
+                         "', role = '" + newRole +
+                         "', updated_at = CURRENT_TIMESTAMP WHERE user_id = " + to_string(userId) + ";";
 
     // Execute the update
-    if (sqlite3_step(stmt) == SQLITE_DONE) {
+    rc = sqlite3_exec(DB, updateQuery.c_str(), 0, 0, nullptr);
+    if (rc == SQLITE_OK) {
         cout << "User updated successfully!" << endl;
     } else {
         cerr << "Error updating user: " << sqlite3_errmsg(DB) << endl;
     }
-
-    sqlite3_finalize(stmt);
 }
 
 // This function can`t delete Customer or Admin
@@ -362,15 +353,13 @@ void fireEmployee(sqlite3 *DB) {
     cin >> userId;
 
     // Check if the user exists and is an employee (not Admin or Customer)
-    string query = "SELECT role FROM users WHERE user_id = ?";
+    string query = "SELECT role FROM users WHERE user_id = " + to_string(userId) + ";";
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
         cerr << "Error preparing statement: " << sqlite3_errmsg(DB) << endl;
         return;
     }
-
-    sqlite3_bind_int(stmt, 1, userId);
 
     if (sqlite3_step(stmt) != SQLITE_ROW) {
         cout << "User with ID " << userId << " not found." << endl;
@@ -385,6 +374,8 @@ void fireEmployee(sqlite3 *DB) {
         return;
     }
 
+    sqlite3_finalize(stmt);
+
     // Confirm firing the employee
     cout << "Are you sure you want to fire this " << role << "? (y/n): ";
     char confirmation;
@@ -392,16 +383,9 @@ void fireEmployee(sqlite3 *DB) {
 
     if (confirmation == 'y' || confirmation == 'Y') {
         // Delete the employee from the database
-        string deleteQuery = "DELETE FROM users WHERE user_id = ?";
-        rc = sqlite3_prepare_v2(DB, deleteQuery.c_str(), -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
-            cerr << "Error preparing delete statement: " << sqlite3_errmsg(DB) << endl;
-            return;
-        }
-
-        sqlite3_bind_int(stmt, 1, userId);
-
-        if (sqlite3_step(stmt) == SQLITE_DONE) {
+        string deleteQuery = "DELETE FROM users WHERE user_id = " + to_string(userId) + ";";
+        rc = sqlite3_exec(DB, deleteQuery.c_str(), nullptr, nullptr, nullptr);
+        if (rc == SQLITE_OK) {
             cout << "Employee with ID " << userId << " has been fired successfully." << endl;
         } else {
             cerr << "Error firing employee: " << sqlite3_errmsg(DB) << endl;
@@ -409,12 +393,10 @@ void fireEmployee(sqlite3 *DB) {
     } else {
         cout << "Employee firing canceled." << endl;
     }
-
-    sqlite3_finalize(stmt);
 }
 
 
-bool insertPayment(sqlite3 *DB, int reservation_id, float amount, const string &payment_method, const string &status) {
+bool insertPayment(sqlite3 *DB, int reservation_id, float amount, string &payment_method, string &status) {
     string insertQuery = "INSERT INTO payments (reservation_id, amount, payment_method, status) VALUES (" +
                          to_string(reservation_id) + ", " + to_string(amount) + ", '" + payment_method + "', '" + status + "');";
     
@@ -439,6 +421,7 @@ void addNewCar(sqlite3 *DB) {
     getline(cin, license_plate);
     cout << "Enter Daily Rental Price: ";
     cin >> daily_rental_price;
+    cin.ignore();
     cout << "Enter concise description of the car (e.g., engine type): ";
     getline(cin, description);
 
@@ -628,7 +611,7 @@ void makeReservation(sqlite3* DB, int employee_id) {
 
     while (sqlite3_step(pendingStmt) == SQLITE_ROW) {
         int reservation_id = sqlite3_column_int(pendingStmt, 0);
-        string end_date = reinterpret_cast<const char*>(sqlite3_column_text(pendingStmt, 1));
+        string end_date = (char*)sqlite3_column_text(pendingStmt, 1);
 
         // Check if the reservation is overdue using report.compareDates(end_date)
         if (report.compareDates(end_date)) {
@@ -667,7 +650,7 @@ void makeReservation(sqlite3* DB, int employee_id) {
     cin >> days;
 
     float daily_price = sqlite3_column_double(stmt, 0);
-    string status = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+    string status = (char*)sqlite3_column_text(stmt, 1);
     sqlite3_finalize(stmt);
 
     if (status != "Available") {
@@ -676,40 +659,30 @@ void makeReservation(sqlite3* DB, int employee_id) {
     }
 
     float total_price = daily_price * days; 
-    string sql = "INSERT INTO reservations (user_id, car_id, end_date, total_price) VALUES (?, ?, ?, ?);";
-    sqlite3_stmt* insert_stmt;
-    rc = sqlite3_prepare_v2(DB, sql.c_str(), -1, &insert_stmt, NULL);
-    if (rc != SQLITE_OK) {
-        cerr << "Failed to prepare insert statement: " << sqlite3_errmsg(DB) << endl;
-        return;
-    }
     string end_date = dateManipulation("", days);
 
-    sqlite3_bind_int(insert_stmt, 1, user_id);
-    sqlite3_bind_int(insert_stmt, 2, car_id);
-    sqlite3_bind_text(insert_stmt, 3, end_date.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_double(insert_stmt, 4, total_price);
+    string insertQuery = "INSERT INTO reservations (user_id, car_id, end_date, total_price) VALUES (" 
+        + to_string(user_id) + ", " + to_string(car_id) + ", '" + end_date + "', " + to_string(total_price) + ");";
 
-    rc = sqlite3_step(insert_stmt);
+    rc = sqlite3_exec(DB, insertQuery.c_str(), 0, 0, nullptr);
 
-    if (rc != SQLITE_DONE) {
+    if (rc != SQLITE_OK) {
         cerr << "Error inserting reservation: " << sqlite3_errmsg(DB) << endl;
     } else {
         cout << "Reservation made successfully!" << endl;
         makeReport(DB, car_id, employee_id); // Generate report
     }
 
-    sqlite3_finalize(insert_stmt);
+    string updateCarQuery = "UPDATE cars SET status = 'Rented' WHERE car_id = " + to_string(car_id) + ";";
+    rc = sqlite3_exec(DB, updateCarQuery.c_str(), 0, 0, nullptr);
 
-    string query_to_update_car = "UPDATE cars SET status = 'Rented' WHERE car_id = " + to_string(car_id) + " ;";
-    
-    rc = sqlite3_exec(DB, query_to_update_car.c_str(), 0, 0, nullptr);
-    if(rc != SQLITE_OK) {
+    if (rc != SQLITE_OK) {
         cerr << "Error updating car status: " << sqlite3_errmsg(DB) << endl;
     } else {
         cout << "Car status updated successfully!" << endl;
     }
 }
+
 // done maybe it need some additional improvement to generate reports
 void cancelReservation(sqlite3 *DB, int employee_id) {
     int reserve_id, id;
@@ -853,10 +826,10 @@ void viewReservationDetails(sqlite3 *DB) {
             int reservation_id = sqlite3_column_int(stmt, 0);
             int user_id = sqlite3_column_int(stmt, 1);
             int car_id = sqlite3_column_int(stmt, 2);
-            const char *end_date = (const char *)sqlite3_column_text(stmt, 4);
+            string end_date = (char *)sqlite3_column_text(stmt, 4);
             double total_price = sqlite3_column_double(stmt, 5);
             double extra_charge = sqlite3_column_double(stmt, 6);
-            const char *status = (const char *)sqlite3_column_text(stmt, 7);
+            string status = (char *)sqlite3_column_text(stmt, 7);
 
             // Fetch car details
             string carQuery = "SELECT * FROM cars WHERE car_id = " + to_string(car_id) + ";";
@@ -864,9 +837,9 @@ void viewReservationDetails(sqlite3 *DB) {
             sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, nullptr);
             sqlite3_step(stmt_car);
 
-            const char *producer = (const char *)sqlite3_column_text(stmt_car, 1);
-            const char *model = (const char *)sqlite3_column_text(stmt_car, 2);
-            const char *license_plate = (const char *)sqlite3_column_text(stmt_car, 3);
+            string producer = (char *)sqlite3_column_text(stmt_car, 1);
+            string model = (char *)sqlite3_column_text(stmt_car, 2);
+            string license_plate = (char *)sqlite3_column_text(stmt_car, 3);
 
             sqlite3_finalize(stmt_car);
 
@@ -941,9 +914,9 @@ void viewAllReservation(sqlite3 *DB) {
 
                 if (sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, nullptr) == SQLITE_OK) {
                     if (sqlite3_step(stmt_car) == SQLITE_ROW) {
-                        const char *producer = (const char *)sqlite3_column_text(stmt_car, 1);
-                        const char *model = (const char *)sqlite3_column_text(stmt_car, 2);
-                        const char *license_plate = (const char *)sqlite3_column_text(stmt_car, 3);
+                        string producer = (char *)sqlite3_column_text(stmt_car, 1);
+                        string model = (char *)sqlite3_column_text(stmt_car, 2);
+                        string license_plate = (char *)sqlite3_column_text(stmt_car, 3);
 
                         // Display reservation details
                         cout << "----------------------------------------------------" << endl;
@@ -1034,7 +1007,7 @@ void inventoryManagerMenu(sqlite3* DB) {
     cout << "1. Add a New Car" << endl;
     cout << "2. Update Car Details" << endl;
     cout << "3. Remove a Car" << endl;
-    cout << "4. View Car Status" << endl;
+    cout << "4. View Car" << endl;
     cout << "5. View Reservations " << endl;
     cout << "0. Log Out" << endl;
     cout << "=============================================" << endl;
@@ -1059,13 +1032,13 @@ void inventoryManagerMenu(sqlite3* DB) {
                 goto A;
                 break;
             case 4:
-                cout << "Viewing car status..." << endl;
+                cout << "Viewing cars..." << endl;
                 viewCars(DB, true);
                 goto A;
                 break;
             case 5:
-                cout << "Generating reservation reports..." << endl;
-                // Add code to generate reports
+                cout << "Redirecting to reservations..." << endl;
+                viewAllReservation(DB);
                 goto A;
                 break;
             case 0:
@@ -1137,76 +1110,59 @@ void adminMenu(sqlite3 *DB, int employee_id) {
 
 
     public:
-void register_user(sqlite3* DB, int employee_id, string key=""){
-    // implement needed to show the id of the user
-            User newUser;
-            int choice;
-           
-            if (key == admin_key){
-                cout << "1. Admin." << endl;
-                cout << "2. Inventory Manager." << endl;
-                cout << "3. Service Agent." << endl;
-                cout << "Who are you trying to register: ";
-                cin >> choice;
+void register_user(sqlite3* DB, int employee_id, string key = "") {
+    // Implement needed to show the ID of the user
+    User newUser;
+    int choice;
 
-                if (choice == 1)
-                    newUser.is_admin = "Admin";
-                else if (choice == 2)
-                    newUser.is_admin = "Inventory Manager";
-                else if (choice == 3)
-                    newUser.is_admin = "Service Agent";
-            }
+    if (key == admin_key) {
+        cout << "1. Admin." << endl;
+        cout << "2. Inventory Manager." << endl;
+        cout << "3. Service Agent." << endl;
+        cout << "Who are you trying to register: ";
+        cin >> choice;
 
-            cout << endl << "Register New User" << endl;
-            cout << "--------------------" << endl;
-            cout << "Enter first name: ";
-            cin.ignore();
-            getline(cin, newUser.first_name);
-            cout << "Enter last name: ";
-            getline(cin, newUser.last_name);
-            cout << "Enter email: ";
-            getline(cin, newUser.email);
-            if (newUser.is_admin != "Customer"){
-            cout << "Enter password: ";
-            getline(cin, newUser.password);
-            }
-            cout << "Enter phone number: ";
-            getline(cin, newUser.phone);
-            cout << "Enter address: ";
-            getline(cin, newUser.address);
+        if (choice == 1)
+            newUser.user_role = "Admin";
+        else if (choice == 2)
+            newUser.user_role = "Inventory Manager";
+        else if (choice == 3)
+            newUser.user_role = "Service Agent";
+    }
 
-            char* errMsg = nullptr;
-            const char* sql = "INSERT INTO Users(first_name, last_name, email, password, phone, address, role) VALUES(?,?,?,?,?,?,?);";
-            sqlite3_stmt* stmt;
-            int rc = sqlite3_prepare_v2(DB, sql, -1, &stmt, 0);
-            if (rc != SQLITE_OK) {
-                cerr << "Failed to prepare statement: " << sqlite3_errmsg(DB) << endl;
-                return;
-            }
+    cout << endl << "Register New User" << endl;
+    cout << "--------------------" << endl;
+    cout << "Enter first name: ";
+    cin.ignore();
+    getline(cin, newUser.first_name);
+    cout << "Enter last name: ";
+    getline(cin, newUser.last_name);
+    cout << "Enter email: ";
+    getline(cin, newUser.email);
+    if (newUser.user_role != "Customer") {
+        cout << "Enter password: ";
+        getline(cin, newUser.password);
+    }
+    cout << "Enter phone number: ";
+    getline(cin, newUser.phone);
+    cout << "Enter address: ";
+    getline(cin, newUser.address);
 
-            sqlite3_bind_text(stmt, 1, newUser.first_name.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 2, newUser.last_name.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 3, newUser.email.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 4, newUser.password.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 5, newUser.phone.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 6, newUser.address.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 7, newUser.is_admin.c_str(), -1, SQLITE_STATIC);
+    string sql = "INSERT INTO Users(first_name, last_name, email, password, phone, address, role) VALUES('" +
+                 newUser.first_name + "', '" + newUser.last_name + "', '" + newUser.email + "', '" +
+                 newUser.password + "', '" + newUser.phone + "', '" + newUser.address + "', '" + 
+                 newUser.user_role + "');";
 
-            rc = sqlite3_step(stmt);
-            if (rc != SQLITE_DONE) {
-                cerr << "Error inserting data: " << sqlite3_errmsg(DB) << endl;
-                sqlite3_finalize(stmt);
-                return;
-            } else {
-                cout << "User registered successfully!" << endl;
-                sqlite3_finalize(stmt);
-                if (newUser.is_admin == "Customer"){
-                    makeReservation(DB, employee_id);
-                }
-                return;
-            }
-
+    int rc = sqlite3_exec(DB, sql.c_str(), nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) {
+        cerr << "Error inserting data: " << sqlite3_errmsg(DB) << endl;
+    } else {
+        cout << "User registered successfully!" << endl;
+        if (newUser.user_role == "Customer") {
+            makeReservation(DB, employee_id);
         }
+    }
+}
 
 void login(sqlite3* DB) {
     string email, password;
@@ -1219,36 +1175,33 @@ void login(sqlite3* DB) {
     cout << "Enter password: ";
     getline(cin, password);
 
-    const char* sql = "SELECT user_id, role FROM users WHERE email = ? AND password = ?";
-    sqlite3_stmt* stmt;
+    // Build SQL query with direct string concatenation
+    string sql = "SELECT user_id, role FROM users WHERE email = '" + email + "' AND password = '" + password + "';";
 
-    int rc = sqlite3_prepare_v2(DB, sql, -1, &stmt, 0);
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, 0);
     if (rc != SQLITE_OK) {
         cerr << "Failed to prepare statement: " << sqlite3_errmsg(DB) << endl;
         return;
     }
 
-    // Bind values
-    sqlite3_bind_text(stmt, 1, email.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_STATIC);
-
     // Execute the query
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
         int user_id = sqlite3_column_int(stmt, 0);
-        const char* role = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        string role = (char*)(sqlite3_column_text(stmt, 1));
 
         cout << "Login successful!" << endl;
 
-        if (strcmp(role, "Admin") == 0) {
+        if (role == "Admin") {
             cout << "Welcome, Admin!" << endl;
             sqlite3_finalize(stmt);
             adminMenu(DB, user_id);
-        } else if (strcmp(role, "Inventory Manager") == 0) {
+        } else if (role == "Inventory Manager") {
             cout << "Welcome, Inventory Manager!" << endl;
             sqlite3_finalize(stmt);
             inventoryManagerMenu(DB);
-        } else if (strcmp(role, "Service Agent") == 0) {
+        } else if (role == "Service Agent") {
             cout << "Welcome, " << role << "!" << endl;
             sqlite3_finalize(stmt);
             agentMenu(DB, user_id);
@@ -1261,85 +1214,97 @@ void login(sqlite3* DB) {
         sqlite3_finalize(stmt);
     }
 }
-void viewCars(sqlite3 *DB, bool isManager = false){
+
+void viewCars(sqlite3 *DB, bool isManager = false) {
     int choice = -1;
     string status = "Available";
-    string query = "SELECT * FROM cars WHERE status = '"+ status +"';";
-    cout << "======================Cars======================" << endl;
-    if (isManager){
-        cout << "1. Available Cars." << endl;
-        cout << "2. Cars Under Maintainance." << endl;
-        cout << "3. All Cars." << endl;
-        cout << "4. Rented Cars." << endl;
-        cout << "0. Back."<< endl;
-        cout << "Enter your choice: ";
-        cin >> choice;
-        if (choice == 0){
+    string query = "SELECT * FROM cars WHERE status = '" + status + "';";
+
+    do {
+        cout << "======================Cars======================" << endl;
+
+        if (isManager) {
+            cout << "1. Available Cars." << endl;
+            cout << "2. Cars Under Maintainance." << endl;
+            cout << "3. All Cars." << endl;
+            cout << "4. Rented Cars." << endl;
+            cout << "0. Back." << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            if (choice == 0) {
+                return;
+            } else if (choice == 1) {
+                status = "Available";
+                query = "SELECT * FROM cars WHERE status = '" + status + "';";
+            } else if (choice == 2) {
+                status = "Under Maintainance";
+                query = "SELECT * FROM cars WHERE status = '" + status + "';";
+            } else if (choice == 3) {
+                query = "SELECT * FROM cars";
+            } else if (choice == 4) {
+                status = "Rented";
+                query = "SELECT * FROM cars WHERE status = '" + status + "';";
+            } else {
+                cout << "Invalid choice. Please try again." << endl;
+                continue;
+            }
+        }
+
+        sqlite3_stmt *stmt;
+        int rc = sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, NULL);
+
+        if (rc != SQLITE_OK) {
+            cerr << "Error: " << sqlite3_errmsg(DB) << endl;
             return;
         }
-        else if (choice == 1){
-            status = "Available";
-            query = "SELECT * FROM cars WHERE status = '" + status + "';";
+
+        bool car_exist = false;
+
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            car_exist = true;
+            int car_id = sqlite3_column_int(stmt, 0);
+            string producer = (char*)sqlite3_column_text(stmt, 1);
+            string model = (char*)sqlite3_column_text(stmt, 2);
+            string license_plate = (char*)sqlite3_column_text(stmt, 3);
+            float daily_rent = sqlite3_column_double(stmt, 4);
+            string status = (char*)sqlite3_column_text(stmt, 5);
+            string description = (char*)sqlite3_column_text(stmt, 6);
+            string created_at = (char*)sqlite3_column_text(stmt, 7);
+
+            cout << "----------------------------------------------------" << endl;
+            cout << "Car ID: " << car_id << endl;
+            cout << "Produced by: " << producer << endl;
+            cout << "Model: " << model << endl;
+            cout << "License Plate: " << license_plate << endl;
+            cout << "Daily Rent Price: " << daily_rent << endl;
+            cout << "Status: " << status << endl;
+            cout << "Description: " << description << endl;
+            cout << "Created at: " << created_at << endl;
+            cout << "----------------------------------------------------" << endl;
         }
-        else if (choice == 2){
-            status = "Under Maintainance";
-            query = "SELECT * FROM cars WHERE status = '" + status + "';";
+
+        cout << "=====================End of Car List=====================" << endl;
+
+        if (!car_exist) {
+            cout << "Currently, there is no car in the database." << endl;
         }
-        else if (choice == 3){
-            query = "SELECT * FROM cars";
+
+        if (rc != SQLITE_DONE) {
+            cerr << "Error: " << sqlite3_errmsg(DB) << endl;
         }
-        else if (choice == 4){
-            status = "Rented";
-            query = "SELECT * FROM cars WHERE status = '" + status + "';";
+
+        sqlite3_finalize(stmt);
+
+        if (isManager) {
+            cout << "\nDo you want to view the car list again? (1 for Yes, 0 for No): ";
+            cin >> choice;
+
+            if (choice != 1) {
+                break;
+            }
         }
-        
-    }
-    
-    sqlite3_stmt *stmt;
-
-    int rc = sqlite3_prepare_v2(DB, query.c_str(),-1,&stmt,NULL);
-
-    if (rc != SQLITE_OK){
-        cerr << "Error: " << sqlite3_errmsg(DB) << endl;
-        return;
-    }
-
-    bool car_exist = false;
-
-    while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
-        car_exist = true;
-        int car_id = sqlite3_column_int(stmt,0);
-        string producer = (char*)sqlite3_column_text(stmt, 1);
-        string model = (char*)sqlite3_column_text(stmt, 2);
-        string license_plate = (char*)sqlite3_column_text(stmt, 3);
-        float daily_rent = sqlite3_column_double(stmt, 4);
-        string status = (char*)sqlite3_column_text(stmt, 5);
-        string description = (char*)sqlite3_column_text(stmt, 6);
-        string created_at = (char*)sqlite3_column_text(stmt, 7);
-
-        cout << "----------------------------------------------------" << endl;
-        cout << "car ID: " << car_id << endl;
-        cout << "Produced by: " << producer << endl;
-        cout << "Model: " << model << endl;
-        cout << "Lisence Plate: " << license_plate << endl;
-        cout << "Daily Rent Price: " << daily_rent << endl;
-        cout << "Status: " << status << endl;
-        cout << "Description: " << description << endl;
-        cout << "Created at: " << created_at << endl;
-        cout << "----------------------------------------------------" << endl;
-        
-    }
-    cout << "=====================End of Car list=====================" << endl;
-
-
-    if (!car_exist){
-        cout << "Currently their is no car in the database" << endl;
-    }
-    if (rc != SQLITE_DONE){
-        cerr << "Error: " << sqlite3_errmsg(DB) << endl;
-    }
-
-    sqlite3_finalize(stmt);
+    } while (isManager);
 }
 
 };
