@@ -1,5 +1,7 @@
 #include <iostream>
 #include <ctime>
+#include <iomanip>
+
 #include "sqlite3.h"
 
 using namespace std;
@@ -29,6 +31,13 @@ struct Node {
     }
 };
 
+/*
+This class need an update on the display method and specially at 
+addElement method to check if the reservation id already exists in 
+the linked list if it does exist the method should update this
+reservation with the new one else this will make a duplicate data
+but may be since this car rental system it may not be necessary.
+*/
 
 class DailyReport{
     Node * head = nullptr;
@@ -51,30 +60,85 @@ public:
     }
 
     void displayAll() {
+        string status;
         cout << "=====================Reports=====================" << endl;
+
         if (head == nullptr) {
             cout << "No reports available.\n";
             return;
         }
-        
+        while (true){
+        cout << "1. All Reports." << endl;
+        cout << "2. New Reservations." << endl;
+        cout << "3. Comleted Reservations." << endl;
+        cout << "4. Cancelled Reservations." << endl;
+        cout << "0. Back." << endl;
+        cout << "Enter your choice: ";
+        int choice;
+        cin >> choice;
+
+        switch (choice)
+        {
+            case 0:
+                return;
+            case 1:
+                status = "All";
+                break;
+            case 2:
+                status = "Pending";
+                break;
+            case 3:
+                status = "Complete";
+                break;
+            case 4:
+                status = "Canceled";
+                break;
+            
+            default:
+                cerr << "Invalid choice please try again!!" << endl;
+                break;
+        }
+
+
         Node* temp = head;
-        
+        bool found = false;
+
+        // Table header
+        cout << left << setw(12) << "Res. ID" << setw(10) << "User ID"
+             << setw(10) << "Car ID" << setw(15) << "Total Paid"
+             << setw(15) << "Extra Charge" << setw(15) << "Status"
+             << setw(15) << "End Date" << setw(15) << "Reporter" << endl;
+
+        cout << string(100, '-') << endl;
+
+        // Search for the given status
         while (temp != nullptr) {
-            cout << "-------------------------------------" << endl;
-            cout << "Reported by: " << temp->reported_by << endl;
-                cout << "Reservation ID: " << temp->reservationId 
-                    << ", \nUser ID: " << temp->userId
-                    << ", \nCar ID: " << temp->carId
-                    << ", \nTotal Paid: " << temp->total_amount_paid
-                    << ", \nExtra Charge: " << temp->extra_charge
-                    << ", \nStatus: " << temp->status
-                    << ", \nEnd Date: " << temp->end_date
-                    << "\n";
-            cout << "-------------------------------------" << endl;
+            if (status != "All"){
+                if (temp->status != status){
+                    temp = temp->next;
+                    continue;
+                    }
+            }
+                found = true;
+                cout << left << setw(12) << temp->reservationId
+                     << setw(10) << temp->userId
+                     << setw(10) << temp->carId
+                     << setw(15) << temp->total_amount_paid
+                     << setw(15) << temp->extra_charge
+                     << setw(15) << temp->status
+                     << setw(15) << temp->end_date
+                     << setw(15) << temp->reported_by << endl;
             
             temp = temp->next;
         }
+
+        if (!found) {
+            cout << "No reports found with status: " << status << endl;
+        }
+
+        cout << string(100, '-') << endl;
         cout << "======================End of Reports=====================" << endl;
+    }
     }
 
 
@@ -593,6 +657,7 @@ void makeReport(sqlite3 *DB, int Car_id, int employee_id){
 void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
     int car_id;
     int days;
+    cout << "Making reservation..." << endl;
     if (user_id == 0){
         cout << "Enter the user ID: ";
         cin >> user_id;
@@ -647,8 +712,6 @@ void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
         return;
     }
 
-    cout << "For how long do you need the car? (Enter number of days): ";
-    cin >> days;
 
     float daily_price = sqlite3_column_double(stmt, 0);
     string status = (char*)sqlite3_column_text(stmt, 1);
@@ -659,6 +722,9 @@ void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
         return;
     }
 
+    cout << "For how long do you need the car? (Enter number of days): ";
+    cin >> days;
+    
     float total_price = daily_price * days; 
     string end_date = dateManipulation("", days);
 
@@ -669,6 +735,7 @@ void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
 
     if (rc != SQLITE_OK) {
         cerr << "Error inserting reservation: " << sqlite3_errmsg(DB) << endl;
+        return;
     } else {
         cout << "Reservation made successfully!" << endl;
         makeReport(DB, car_id, employee_id); // Generate report
@@ -1214,14 +1281,12 @@ void login(sqlite3* DB) {
         int user_id = sqlite3_column_int(stmt, 0);
         string role = (char*)(sqlite3_column_text(stmt, 1));
 
-        cout << "Login successful!" << endl;
-
         if (role == "Admin") {
-            cout << "Welcome, Admin!" << endl;
+            cout << "Welcome, " << role << "!" << endl;
             sqlite3_finalize(stmt);
             adminMenu(DB, user_id);
         } else if (role == "Inventory Manager") {
-            cout << "Welcome, Inventory Manager!" << endl;
+            cout << "Welcome, " << role << "!" << endl;
             sqlite3_finalize(stmt);
             inventoryManagerMenu(DB);
         } else if (role == "Service Agent") {
