@@ -7,8 +7,6 @@
 using namespace std;
 
 string admin_key = "admin";
-// string "Enter your choice: " = "Please select an option: ";
-
 
 struct Node {
     int reservationId, userId, carId;
@@ -31,13 +29,6 @@ struct Node {
     }
 };
 
-/*
-This class need an update on the display method and specially at 
-addReport method to check if the reservation id already exists in 
-the linked list if it does exist the method should update this
-reservation with the new one else this will make a duplicate data
-but may be since this car rental system it may not be necessary.
-*/
 class DailyReport {
     Node* head = nullptr;
 
@@ -1148,7 +1139,6 @@ void viewPayments(sqlite3 *DB) {
     } while (choice != 0);
 }
 
-
 // done
 void agentMenu(sqlite3 *DB, int employee_id){
     int choice = 0;
@@ -1319,6 +1309,8 @@ void register_user(sqlite3* DB, int employee_id, string key = "") {
         cout << "1. Admin." << endl;
         cout << "2. Inventory Manager." << endl;
         cout << "3. Service Agent." << endl;
+        cout << "4. Customer." << endl;
+        cout << "0. Back."<<endl;
         cout << "Who are you trying to register: ";
         cin >> choice;
 
@@ -1328,6 +1320,13 @@ void register_user(sqlite3* DB, int employee_id, string key = "") {
             newUser.user_role = "Inventory Manager";
         else if (choice == 3)
             newUser.user_role = "Service Agent";
+        else if (choice == 4)
+            newUser.user_role = "Customer"; 
+        else {
+            cout << "Invalid choice." << endl;
+            return;
+        }
+    
     } else {
         newUser.user_role = "Customer"; // Default role
     }
