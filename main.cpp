@@ -6,7 +6,7 @@
 
 using namespace std;
 
-string admin_key = "admin";
+string admin_key = "adminKey";
 
 struct Node {
     int reservationId, userId, carId;
@@ -300,7 +300,7 @@ void viewAllUsers(sqlite3 *DB, bool isManager = false) {
         }
 
         // Table Header
-        cout << "\n=============================================================================================" << endl;
+        cout << "\n=========================================" << endl;
         cout << left << setw(10) << "User ID" << setw(20) << "Name" << setw(30)
          << "Email" << setw(15) << "Phone" << setw(30) << "Address" << setw(15) << "Role" << endl;
         cout << string(110, '-') << endl;
@@ -329,8 +329,7 @@ void viewAllUsers(sqlite3 *DB, bool isManager = false) {
         }
 
         sqlite3_finalize(stmt);
-        cout << "=============================================================================================" << endl;
-        cout << "End of user list.\n" << endl;
+        cout << "==================End of user list.===================" << endl;
 
         if (isManager) { // This is only for admins
             cout << "Would you like to go again? (y/n): ";
@@ -412,7 +411,6 @@ void updateUser(sqlite3 *DB) {
     }
 }
 
-// This function can`t delete Customer or Admin
 void fireEmployee(sqlite3 *DB) {
     int userId;
     cout << "\nEnter the User ID of the employee you want to fire: ";
@@ -655,7 +653,6 @@ void makeReport(sqlite3 *DB, int Car_id, int employee_id){
 
 }
 
-// The improvement for this function is done
 void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
     int car_id;
     int days;
@@ -753,7 +750,6 @@ void makeReservation(sqlite3* DB, int employee_id, int user_id = 0) {
     }
 }
 
-// done maybe it need some additional improvement to generate reports
 void cancelReservation(sqlite3 *DB, int employee_id) {
     int reserve_id, id;
     float penality = 0.25, daily_rent = 0.0, total_price;
@@ -865,6 +861,7 @@ void cancelReservation(sqlite3 *DB, int employee_id) {
 
     cout << "=================== Reservation cancelled successfully =====================" << endl;
 }
+
 void viewReservationDetails(sqlite3 *DB) {
     cout << "=================== Reservation Details ====================" << endl;
     cout << "Search by:" << endl;
@@ -985,24 +982,25 @@ void viewAllReservation(sqlite3 *DB) {
                  << setw(20) << "Car (Producer)"
                  << setw(15) << "Model"
                  << setw(20) << "License Plate"
-                 << setw(15) << "Start Date"
-                 << setw(15) << "End Date"
+                 << setw(20) << "End Date"
                  << setw(15) << "Total Price"
                  << setw(15) << "Extra Charge"
                  << setw(12) << "Status" << endl;
             cout << string(140, '-') << endl;
 
             while (sqlite3_step(stmt) == SQLITE_ROW) {
-                int reservation_id = sqlite3_column_int(stmt, 0);
+                int reservation_id = sqlite3_column_int(stmt, 0); 
                 int user_id = sqlite3_column_int(stmt, 1);
                 int car_id = sqlite3_column_int(stmt, 2);
-                string start_date = (char *)sqlite3_column_text(stmt, 3);
-                string end_date = (char *)sqlite3_column_text(stmt, 4);
-                double total_price = sqlite3_column_double(stmt, 5);
-                double extra_charge = sqlite3_column_double(stmt, 6);
-                string status = (char *)sqlite3_column_text(stmt, 7);
+                string end_date = (char *)sqlite3_column_text(stmt, 3);
+                double total_price = sqlite3_column_double(stmt, 4);
+                double extra_charge = sqlite3_column_double(stmt, 5);
+                string status = (char *)sqlite3_column_text(stmt, 6);
 
-                // Skip if option 2 (Overdue Reservations) is selected and the end date is not overdue
+                /* 
+                    Skip displaying the content if option 2 (Overdue Reservations) is selected and
+                    the end date is not overdue and also if the status is still pending
+                 */
                 if (choice == 2) {
                     if (status != "Pending")
                         continue;
@@ -1016,9 +1014,9 @@ void viewAllReservation(sqlite3 *DB) {
 
                 if (sqlite3_prepare_v2(DB, carQuery.c_str(), -1, &stmt_car, nullptr) == SQLITE_OK) {
                     if (sqlite3_step(stmt_car) == SQLITE_ROW) {
-                        string producer = (char *)sqlite3_column_text(stmt_car, 1);
-                        string model = (char *)sqlite3_column_text(stmt_car, 2);
-                        string license_plate = (char *)sqlite3_column_text(stmt_car, 3);
+                        string producer = (char *)sqlite3_column_text(stmt_car, 1); // producer
+                        string model = (char *)sqlite3_column_text(stmt_car, 2); // model
+                        string license_plate = (char *)sqlite3_column_text(stmt_car, 3); // license_plate
 
                         // Display reservation details in table format
                         cout << left << setw(15) << reservation_id
@@ -1026,8 +1024,7 @@ void viewAllReservation(sqlite3 *DB) {
                              << setw(20) << producer
                              << setw(15) << model
                              << setw(20) << license_plate
-                             << setw(15) << start_date
-                             << setw(15) << end_date
+                             << setw(20) << end_date
                              << setw(15) << total_price
                              << setw(15) << extra_charge
                              << setw(12) << status << endl;
@@ -1041,7 +1038,6 @@ void viewAllReservation(sqlite3 *DB) {
                     cerr << "Error fetching car details: " << sqlite3_errmsg(DB) << endl;
                 }
             }
-
 
             if (!hasResults) {
                 cout << "\nNo records found.\n";
@@ -1068,7 +1064,7 @@ void viewPayments(sqlite3 *DB) {
         cin >> choice;
 
         if (choice == 0) {
-            return; // Exit the function
+            return;
         } else if (choice == 1) {
             query = "SELECT * FROM payments ";
         } else if (choice == 2) {
@@ -1139,18 +1135,19 @@ void viewPayments(sqlite3 *DB) {
     } while (choice != 0);
 }
 
-// done
 void agentMenu(sqlite3 *DB, int employee_id){
     int choice = 0;
     while(true){
         cout << endl << "================Agent Menu==============" << endl;
-        cout << "1. Make a Reservation" << endl;
-        cout << "2. Cancel a Reservation" << endl;
-        cout << "3. Search Reservation" << endl;
-        cout << "4. Register New Customer" << endl;
+        cout << "1. Make a Reservation." << endl;
+        cout << "2. Cancel a Reservation." << endl;
+        cout << "3. Search Reservation." << endl;
+        cout << "4. Register New Customer." << endl;
         cout << "5. View All Customers." << endl;
         cout << "6. View Reservations." << endl;
-        cout << "0. Log Out" << endl;
+        cout << "7. View available Cars." << endl;
+        cout << "8. Search Car." << endl;
+        cout << "0. Log Out." << endl;
         cout << "=============================================" << endl;
         cout << "Enter your choice: ";
         cin >> choice;
@@ -1177,6 +1174,17 @@ void agentMenu(sqlite3 *DB, int employee_id){
                 cout << "Loading users..." << endl;
                 viewAllReservation(DB);
                 break;
+            
+            case 7:
+                cout << "Loading Cars..." << endl;
+                viewCars(DB);
+                break;
+
+            case 8:
+                cout << "Loading..." << endl;
+                searchCars(DB);
+                break;
+
             case 0:
                 return;
             default:
@@ -1238,10 +1246,9 @@ void inventoryManagerMenu(sqlite3* DB) {
     } while (choice != 0);
 }
 
-//need to implement this function
 void adminMenu(sqlite3 *DB, int employee_id) {
     int choice = 0;
-    string key = admin_key;
+    string key = "";
 
     while (true) {
         cout << endl
@@ -1259,10 +1266,11 @@ void adminMenu(sqlite3 *DB, int employee_id) {
         cout << "Enter your choice: ";
         cin >> choice;
 
-
         switch (choice) {
             case 1:
                 cout << "Redirecting to add a new user..." << endl;
+                cout << "Enter the secret admin key: ";
+                cin >> key;
                 register_user(DB, employee_id, key);
                 break;
 
@@ -1273,17 +1281,17 @@ void adminMenu(sqlite3 *DB, int employee_id) {
 
             case 3:
                 cout << "Fetching users..." << endl;
-                viewAllUsers(DB, true); // Function to query and display all employees
+                viewAllUsers(DB, true);
                 break;
 
             case 4:
                 cout << "Updating employee data..." << endl;
-                updateUser(DB); // Function to update employee details
+                updateUser(DB);
                 break;
 
             case 5:
                 cout << "Firing an employee..." << endl;
-                fireEmployee(DB); // Function to remove an employee
+                fireEmployee(DB);
                 break;
 
             case 6:
@@ -1328,7 +1336,7 @@ void register_user(sqlite3* DB, int employee_id, string key = "") {
         }
     
     } else {
-        newUser.user_role = "Customer"; // Default role
+        newUser.user_role = "Customer";
     }
 
     cout << endl << "Register New User" << endl;
@@ -1494,7 +1502,7 @@ void viewCars(sqlite3 *DB, bool isManager = false) {
             float daily_rent = sqlite3_column_double(stmt, 4);
             string status = (char *)sqlite3_column_text(stmt, 5);
             string description = (char *)sqlite3_column_text(stmt, 6);
-            string created_at = (char *)sqlite3_column_text(stmt, 7);
+            string updated_at = (char *)sqlite3_column_text(stmt, 7);
 
             // Display car details in a table row
             cout << left << setw(10) << car_id
@@ -1506,7 +1514,6 @@ void viewCars(sqlite3 *DB, bool isManager = false) {
                  << setw(25) << description << endl;
         cout << string(155, '-') << endl;
         }
-
 
         if (!car_exist) {
             cout << "Currently, there is no car in the database." << endl;
@@ -1527,6 +1534,92 @@ void viewCars(sqlite3 *DB, bool isManager = false) {
             }
         }
     } while (isManager);
+}
+
+void searchCars(sqlite3 *DB) {
+    string searchInput;
+    string query;
+    while(true){
+    cout << "Choose search type:" << endl;
+    cout << "1. Search by Producer" << endl;
+    cout << "2. Search by Car Model" << endl;
+    cout << "0. Back. " << endl;
+    cout << "Enter your choice: ";
+    int choice;
+    cin >> choice;
+    cin.ignore();
+
+    if (choice == 0){
+        cout << "Returning..." << endl;
+        return;
+    }
+    else if (choice == 1) {
+        cout << "Enter the Producer name: ";
+        getline(cin, searchInput);
+        query = "SELECT * FROM cars WHERE produced_by LIKE '%" + searchInput + "%';";
+
+    } else if (choice == 2) {
+        cout << "Enter the Model name: ";
+        getline(cin, searchInput);
+        query = "SELECT * FROM cars WHERE model LIKE '%" + searchInput + "%';";
+    } else {
+        cout << "Invalid choice. Exiting search." << endl;
+        return;
+    }
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(DB, query.c_str(), -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        cerr << "Error: " << sqlite3_errmsg(DB) << endl;
+        return;
+    }
+
+    bool car_exist = false;
+
+    // Display table header
+    cout << left << setw(10) << "Car ID"
+         << setw(20) << "Producer"
+         << setw(15) << "Model"
+         << setw(20) << "License Plate"
+         << setw(15) << "Daily Rent"
+         << setw(20) << "Status"
+         << setw(25) << "Description" << endl;
+    cout << string(155, '-') << endl;
+
+    // Loop through the query results
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        car_exist = true;
+        int car_id = sqlite3_column_int(stmt, 0);
+        string producer = (char *)sqlite3_column_text(stmt, 1);
+        string model = (char *)sqlite3_column_text(stmt, 2);
+        string license_plate = (char *)sqlite3_column_text(stmt, 3);
+        float daily_rent = sqlite3_column_double(stmt, 4);
+        string status = (char *)sqlite3_column_text(stmt, 5);
+        string description = (char *)sqlite3_column_text(stmt, 6);
+        string updated_at = (char *)sqlite3_column_text(stmt, 7);
+
+        // Display car details in a table row
+        cout << left << setw(10) << car_id
+             << setw(20) << producer
+             << setw(15) << model
+             << setw(20) << license_plate
+             << setw(15) << daily_rent
+             << setw(20) << status
+             << setw(25) << description << endl;
+        cout << string(155, '-') << endl;
+    }
+
+    if (!car_exist) {
+        cout << "No cars found matching your search criteria." << endl;
+    }
+
+    if (rc != SQLITE_DONE) {
+        cerr << "Error: " << sqlite3_errmsg(DB) << endl;
+    }
+
+    sqlite3_finalize(stmt);
+}
 }
 
 };
@@ -1572,7 +1665,7 @@ void mainMenu(sqlite3* DB) {
 int main() {
     cout << "The program Has been updated again." << endl;
     sqlite3* DB;
-    int exit = sqlite3_open("test.db", &DB);
+    int exit = sqlite3_open("System.db", &DB);
     if (exit) {
         std::cerr << "Error opening database: " << sqlite3_errmsg(DB) << std::endl;
         return -1;
@@ -1592,7 +1685,6 @@ int main() {
             phone TEXT UNIQUE NOT NULL,
             address TEXT NOT NULL,
             role TEXT CHECK(role IN ('Admin', 'Inventory Manager', 'Service Agent', 'Customer')),
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
     )";
@@ -1606,7 +1698,6 @@ int main() {
             daily_rental_price REAL NOT NULL,
             status TEXT CHECK(status IN ('Available', 'Rented', 'Under Maintainance')),
             description TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
     )";
@@ -1616,12 +1707,10 @@ int main() {
             reservation_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             car_id INTEGER NOT NULL,
-            start_date TEXT DEFAULT CURRENT_TIMESTAMP,
             end_date TEXT NOT NULL,
             total_price REAL NOT NULL,
             extra_charge REAL DEFAULT '0.0',
             status TEXT CHECK(status IN ('Pending', 'Completed', 'Cancelled')) DEFAULT 'Pending',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
             FOREIGN KEY (car_id) REFERENCES cars(car_id) ON DELETE CASCADE
@@ -1669,10 +1758,10 @@ const char* insertDummyData = R"(
         ('Ford', 'Focus', 'DEF456', 60.0, 'Under Maintainance', 'A spacious compact car.');
 
     -- Insert Reservations
-    INSERT INTO reservations (user_id, car_id, start_date, end_date, total_price, extra_charge, status)
+    INSERT INTO reservations (user_id, car_id, end_date, total_price, extra_charge, status)
     VALUES
-        (4, 1, '2024-12-01', '2024-12-05', 250.0, 0.0, 'Completed'),
-        (4, 2, '2024-12-10', '2024-12-15', 275.0, 10.0, 'Pending');
+        (4, 1, '2024-12-05', 250.0, 0.0, 'Completed'),
+        (4, 2, '2024-12-15', 275.0, 10.0, 'Pending');
 
     -- Insert Payments
     INSERT INTO payments (reservation_id, amount, payment_method, status, payment_date)
